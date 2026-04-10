@@ -82,7 +82,7 @@
       Para la detección en tiempo real necesitas el archivo del modelo.<br/>
       <strong style="color:#e2e8f0;">Descárgalo y súbelo a Netlify junto al index.html:</strong>
     </p>
-    <a href="https://huggingface.co/unity/inference-engine-yolo/resolve/ed7f4daf9263d0d31be1d60b9d67c8baea721d60/yolov8n.onnx"
+    <a href="https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.onnx"
        style="display:block;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.35);border-radius:8px;padding:10px 14px;color:#60a5fa;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:8px;">
       ⬇️ Descargar yolov8n.onnx (~6 MB)
     </a>
@@ -332,7 +332,7 @@ async function runDetection(){
   try{
     const{tensor,scale,ox,oy}=preprocess();
     const inp=new ort.Tensor("float32",tensor,[1,3,SZ,SZ]);
-    const res=await S.model.run({images:inp});
+    const feeds={};feeds[S.inputName||"images"]=inp;const res=await S.model.run(feeds);
     const outData=res[Object.keys(res)[0]].data;
     const W=canvas.width,H=canvas.height;
     const{persons,balls}=postprocess(outData,scale,ox,oy,W,H);
@@ -360,15 +360,20 @@ async function loadModel(){
   S.modelLoading=true;setModelStatus("loading");
   try{
     ort.env.wasm.wasmPaths="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/";
+    ort.env.wasm.numThreads=1;
     S.model=await ort.InferenceSession.create("./yolov8n.onnx",{
-      executionProviders:["webgl","wasm"],graphOptimizationLevel:"all"
+      executionProviders:["wasm"],graphOptimizationLevel:"all"
     });
+    // Detectar nombre real del input
+    S.inputName=S.model.inputNames[0];
+    console.log("Input names:",S.model.inputNames);
+    console.log("Output names:",S.model.outputNames);
     S.modelReady=true;S.modelLoading=false;
     setModelStatus("ready");
     document.getElementById("model-instructions").style.display="none";
     document.getElementById("live-panel").style.display="block";
   }catch(e){
-    S.modelLoading=false;setModelStatus("error",e.message);
+    S.modelLoading=false;console.error('ONNX load error:',e);setModelStatus("error",e.message);
   }
 }
 
@@ -389,8 +394,8 @@ function setModelStatus(status,msg){
     </div>`;
   }else if(status==="error"){
     el.innerHTML=`<div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;">⚠️ MODELO NO ENCONTRADO</div>
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;">Asegúrate de subir <strong>yolov8n.onnx</strong> junto al index.html en Netlify.</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;">⚠️ ERROR AL CARGAR EL MODELO</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;"><span id='err-detail'></span>Abre la consola del navegador (F12 en escritorio) para ver el error completo.</div>
       <button onclick="loadModel()" style="background:none;border:1px solid #334155;border-radius:6px;padding:5px 12px;color:#94a3b8;font-size:11px;cursor:pointer;">🔄 Reintentar</button>
     </div>`;
   }else{
